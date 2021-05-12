@@ -16,6 +16,8 @@ import arc.scene.ui.layout.*;
 import arc.util.*;
 import dalvik.system.*;
 import mindustry.*;
+import mindustry.client.Main;
+import mindustry.core.Version;
 import mindustry.game.Saves.*;
 import mindustry.io.*;
 import mindustry.net.*;
@@ -32,6 +34,116 @@ public class AndroidLauncher extends AndroidApplication{
     boolean doubleScaleTablets = true;
     FileChooser chooser;
     Runnable permCallback;
+
+    class Launcher extends ClientLauncher {
+
+        public Launcher() {
+            super();
+            add(Main.INSTANCE);
+        }
+
+        @Override
+        public void hide(){
+            moveTaskToBack(true);
+        }
+
+        @Override
+        public rhino.Context getScriptContext(){
+            return AndroidRhinoContext.enter(getContext().getCacheDir());
+        }
+
+        @Override
+        public void shareFile(Fi file){
+        }
+
+        @Override
+        public ClassLoader loadJar(Fi jar, String mainClass) throws Exception{
+            return new DexClassLoader(jar.file().getPath(), getFilesDir().getPath(), null, getClassLoader());
+        }
+
+        @Override
+        public void showFileChooser(boolean open, String title, String extension, Cons<Fi> cons){
+            showFileChooser(open, title, cons, extension);
+        }
+
+        void showFileChooser(boolean open, String title, Cons<Fi> cons, String... extensions){
+            String extension = extensions[0];
+
+            if(VERSION.SDK_INT >= VERSION_CODES.Q){
+                Intent intent = new Intent(open ? Intent.ACTION_OPEN_DOCUMENT : Intent.ACTION_CREATE_DOCUMENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType(extension.equals("zip") && !open && extensions.length == 1 ? "application/zip" : "*/*");
+
+                addResultListener(i -> startActivityForResult(intent, i), (code, in) -> {
+                    if(code == Activity.RESULT_OK && in != null && in.getData() != null){
+                        Uri uri = in.getData();
+
+                        if(uri.getPath().contains("(invalid)")) return;
+
+                        Core.app.post(() -> Core.app.post(() -> cons.get(new Fi(uri.getPath()){
+                            @Override
+                            public InputStream read(){
+                                try{
+                                    return getContentResolver().openInputStream(uri);
+                                }catch(IOException e){
+                                    throw new ArcRuntimeException(e);
+                                }
+                            }
+
+                            @Override
+                            public OutputStream write(boolean append){
+                                try{
+                                    return getContentResolver().openOutputStream(uri);
+                                }catch(IOException e){
+                                    throw new ArcRuntimeException(e);
+                                }
+                            }
+                        })));
+                    }
+                });
+            }else if(VERSION.SDK_INT >= VERSION_CODES.M && !(checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED &&
+                    checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED)){
+                chooser = new FileChooser(title, file -> Structs.contains(extensions, file.extension().toLowerCase()), open, file -> {
+                    if(!open){
+                        cons.get(file.parent().child(file.nameWithoutExtension() + "." + extension));
+                    }else{
+                        cons.get(file);
+                    }
+                });
+
+                ArrayList<String> perms = new ArrayList<>();
+                if(checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED){
+                    perms.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+                }
+                if(checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED){
+                    perms.add(Manifest.permission.READ_EXTERNAL_STORAGE);
+                }
+                requestPermissions(perms.toArray(new String[0]), PERMISSION_REQUEST_CODE);
+            }else{
+                if(open){
+                    new FileChooser(title, file -> Structs.contains(extensions, file.extension().toLowerCase()), true, cons).show();
+                }else{
+                    super.showFileChooser(open, "@open", extension, cons);
+                }
+            }
+        }
+
+        @Override
+        public void showMultiFileChooser(Cons<Fi> cons, String... extensions){
+            showFileChooser(true, "@open", cons, extensions);
+        }
+
+        @Override
+        public void beginForceLandscape(){
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+        }
+
+        @Override
+        public void endForceLandscape(){
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER);
+        }
+
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState){
@@ -54,110 +166,7 @@ public class AndroidLauncher extends AndroidApplication{
             Scl.setAddition(0.5f);
         }
 
-        initialize(new ClientLauncher(){
-
-            @Override
-            public void hide(){
-                moveTaskToBack(true);
-            }
-
-            @Override
-            public rhino.Context getScriptContext(){
-                return AndroidRhinoContext.enter(getContext().getCacheDir());
-            }
-
-            @Override
-            public void shareFile(Fi file){
-            }
-
-            @Override
-            public ClassLoader loadJar(Fi jar, String mainClass) throws Exception{
-                return new DexClassLoader(jar.file().getPath(), getFilesDir().getPath(), null, getClassLoader());
-            }
-
-            @Override
-            public void showFileChooser(boolean open, String title, String extension, Cons<Fi> cons){
-                showFileChooser(open, title, cons, extension);
-            }
-
-            void showFileChooser(boolean open, String title, Cons<Fi> cons, String... extensions){
-                String extension = extensions[0];
-
-                if(VERSION.SDK_INT >= VERSION_CODES.Q){
-                    Intent intent = new Intent(open ? Intent.ACTION_OPEN_DOCUMENT : Intent.ACTION_CREATE_DOCUMENT);
-                    intent.addCategory(Intent.CATEGORY_OPENABLE);
-                    intent.setType(extension.equals("zip") && !open && extensions.length == 1 ? "application/zip" : "*/*");
-
-                    addResultListener(i -> startActivityForResult(intent, i), (code, in) -> {
-                        if(code == Activity.RESULT_OK && in != null && in.getData() != null){
-                            Uri uri = in.getData();
-
-                            if(uri.getPath().contains("(invalid)")) return;
-
-                            Core.app.post(() -> Core.app.post(() -> cons.get(new Fi(uri.getPath()){
-                                @Override
-                                public InputStream read(){
-                                    try{
-                                        return getContentResolver().openInputStream(uri);
-                                    }catch(IOException e){
-                                        throw new ArcRuntimeException(e);
-                                    }
-                                }
-
-                                @Override
-                                public OutputStream write(boolean append){
-                                    try{
-                                        return getContentResolver().openOutputStream(uri);
-                                    }catch(IOException e){
-                                        throw new ArcRuntimeException(e);
-                                    }
-                                }
-                            })));
-                        }
-                    });
-                }else if(VERSION.SDK_INT >= VERSION_CODES.M && !(checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED &&
-                    checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED)){
-                    chooser = new FileChooser(title, file -> Structs.contains(extensions, file.extension().toLowerCase()), open, file -> {
-                        if(!open){
-                            cons.get(file.parent().child(file.nameWithoutExtension() + "." + extension));
-                        }else{
-                            cons.get(file);
-                        }
-                    });
-
-                    ArrayList<String> perms = new ArrayList<>();
-                    if(checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED){
-                        perms.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
-                    }
-                    if(checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED){
-                        perms.add(Manifest.permission.READ_EXTERNAL_STORAGE);
-                    }
-                    requestPermissions(perms.toArray(new String[0]), PERMISSION_REQUEST_CODE);
-                }else{
-                    if(open){
-                        new FileChooser(title, file -> Structs.contains(extensions, file.extension().toLowerCase()), true, cons).show();
-                    }else{
-                        super.showFileChooser(open, "@open", extension, cons);
-                    }
-                }
-            }
-
-            @Override
-            public void showMultiFileChooser(Cons<Fi> cons, String... extensions){
-                showFileChooser(true, "@open", cons, extensions);
-            }
-
-            @Override
-            public void beginForceLandscape(){
-                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
-            }
-
-            @Override
-            public void endForceLandscape(){
-                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER);
-            }
-
-        }, new AndroidApplicationConfiguration(){{
+        initialize(new Launcher(), new AndroidApplicationConfiguration(){{
             useImmersiveMode = true;
             hideStatusBar = true;
         }});
@@ -191,6 +200,7 @@ public class AndroidLauncher extends AndroidApplication{
             //print log but don't crash
             Log.err(e);
         }
+        Version.init();
     }
 
     @Override

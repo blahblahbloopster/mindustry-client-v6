@@ -64,7 +64,7 @@ class MessageCrypto {
         communicationClient.addListener(::handle)
 
         try { // Load key, generate if it doesn't exist
-            if (Core.app.isDesktop) {
+            if (!Core.app.isHeadless) {
                 if (!Core.settings.dataDirectory.child("key.txt").exists()) generateKey()
                 else keyQuad = KeyQuad(Base64Coder.decode(Core.settings.dataDirectory.child("key.txt").readString()))
                 Log.info("Loaded keypair")
@@ -79,7 +79,7 @@ class MessageCrypto {
             check(player, received)
         }
 
-        if (Core.app?.isDesktop == true) {
+        if (Core.app?.isHeadless == false) {
             listeners.add {
                 if (it is SignatureEvent && it.valid && it.message != null) {
                     val message = Vars.ui?.chatfrag?.messages?.find { msg -> msg.message.contains(it.message) }
@@ -159,7 +159,7 @@ class MessageCrypto {
         plaintext.put(encoded)
         val ciphertext = destination.crypto.encrypt(plaintext.array())
 
-        communicationClient.send(EncryptedMessageTransmission(ciphertext), { if (Core.app?.isDesktop == true) Toast(3f).add("@client.encryptedsuccess") }, { if (Core.app?.isDesktop == true) Toast(3f).add("@client.nomessageblock") })
+        communicationClient.send(EncryptedMessageTransmission(ciphertext), { if (Core.app?.isHeadless == false) Toast(3f).add("@client.encryptedsuccess") }, { if (Core.app?.isHeadless == false) Toast(3f).add("@client.nomessageblock") })
     }
 
     private fun handle(input: Transmission, sender: Int) {
@@ -191,7 +191,7 @@ class MessageCrypto {
                                     sender,
                                     key,
                                     str,
-                                    if (sender == communicationClient.communicationSystem.id && Core.app?.isDesktop == true) Vars.player.name else key.name
+                                    if (sender == communicationClient.communicationSystem.id && Core.app?.isHeadless == false) Vars.player.name else key.name
                                 )
                             )
                         } catch (ignored: Exception) {}

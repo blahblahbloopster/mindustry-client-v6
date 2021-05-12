@@ -39,55 +39,65 @@ import kotlin.random.*
 object Client {
 
     fun initialize() {
-        registerCommands()
+        Core.app.post {
+            registerCommands()
 
-        Events.on(WorldLoadEvent::class.java) {
-            lastJoinTime = Time.millis();
-            setPluginNetworking(false)
-            PowerInfo.initialize()
-            Navigation.stopFollowing()
-            Navigation.obstacles.clear()
-            configs.clear()
-            ui.unitPicker.found = null
-            control.input.lastVirusWarning = null
-            dispatchingBuildPlans = false
-            hidingBlocks = false
-            hidingUnits = false
-            showingTurrets = false
-            if (state.rules.pvp) ui.announce("[scarlet]Don't use a client in pvp, it's uncool!", 5f)
-        }
+            Events.on(WorldLoadEvent::class.java) {
+                lastJoinTime = Time.millis()
+                setPluginNetworking(false)
+                PowerInfo.initialize()
+                Navigation.stopFollowing()
+                Navigation.obstacles.clear()
+                configs.clear()
+                ui.unitPicker.found = null
+                control.input.lastVirusWarning = null
+                dispatchingBuildPlans = false
+                hidingBlocks = false
+                hidingUnits = false
+                showingTurrets = false
+                if (state.rules.pvp) ui.announce("[scarlet]Don't use a client in pvp, it's uncool!", 5f)
+            }
 
-        Events.on(ClientLoadEvent::class.java) {
-            val changeHash = Core.files.internal("changelog").readString().hashCode() // Display changelog if the file contents have changed & on first run. (this is really scuffed lol)
-            if (Core.settings.getInt("changeHash") != changeHash) ChangelogDialog.show()
-            Core.settings.put("changeHash", changeHash)
+            Events.on(ClientLoadEvent::class.java) {
+                val changeHash = Core.files.internal("changelog").readString()
+                    .hashCode() // Display changelog if the file contents have changed & on first run. (this is really scuffed lol)
+                if (Core.settings.getInt("changeHash") != changeHash) ChangelogDialog.show()
+                Core.settings.put("changeHash", changeHash)
 
-            if (Core.settings.getBool("debug")) Log.level = Log.LogLevel.debug // Set log level to debug if the setting is checked
-            if (Core.settings.getBool("discordrpc")) platform.startDiscord()
+                if (Core.settings.getBool("debug")) Log.level =
+                    Log.LogLevel.debug // Set log level to debug if the setting is checked
+                if (Core.settings.getBool("discordrpc")) platform.startDiscord()
 
-            Autocomplete.autocompleters.add(BlockEmotes())
-            Autocomplete.autocompleters.add(PlayerCompletion())
-            Autocomplete.autocompleters.add(CommandCompletion())
+                Autocomplete.autocompleters.add(BlockEmotes())
+                Autocomplete.autocompleters.add(PlayerCompletion())
+                Autocomplete.autocompleters.add(CommandCompletion())
 
-            Autocomplete.initialize()
+                Autocomplete.initialize()
 
-            Navigation.navigator.init()
-        }
+                Navigation.navigator.init()
+            }
 
-        Events.on(PlayerJoin::class.java) { e ->
-            if (e.player == null) return@on
+            Events.on(PlayerJoin::class.java) { e ->
+                if (e.player == null) return@on
 
-            val message = "[accent]${e.player.name}[accent] has connected."
-            if (Core.settings.getBool("clientjoinleave") && (ui.chatfrag.messages.isEmpty || !ui.chatfrag.messages.first().message.equals(message)) && Time.timeSinceMillis(lastJoinTime) > 10000)
-                player.sendMessage(message)
-        }
+                val message = "[accent]${e.player.name}[accent] has connected."
+                if (Core.settings.getBool("clientjoinleave") && (ui.chatfrag.messages.isEmpty || !ui.chatfrag.messages.first().message.equals(
+                        message
+                    )) && Time.timeSinceMillis(lastJoinTime) > 10000
+                )
+                    player.sendMessage(message)
+            }
 
-        Events.on(PlayerLeave::class.java) { e ->
-            if (e.player == null) return@on
+            Events.on(PlayerLeave::class.java) { e ->
+                if (e.player == null) return@on
 
-            val message = "[accent]${e.player.name}[accent] has disconnected."
-            if (Core.settings.getBool("clientjoinleave") && (ui.chatfrag.messages.isEmpty || !ui.chatfrag.messages.first().message.equals(message)))
-                player.sendMessage(message)
+                val message = "[accent]${e.player.name}[accent] has disconnected."
+                if (Core.settings.getBool("clientjoinleave") && (ui.chatfrag.messages.isEmpty || !ui.chatfrag.messages.first().message.equals(
+                        message
+                    ))
+                )
+                    player.sendMessage(message)
+            }
         }
     }
 

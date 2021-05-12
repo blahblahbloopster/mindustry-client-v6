@@ -7,6 +7,11 @@ import arc.struct.*;
 import arc.util.*;
 import arc.util.io.*;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.util.Arrays;
+
 public class Version{
     /** Build type. 'official' for official releases; 'custom' or 'bleeding edge' are also used. */
     public static String type = "unknown";
@@ -25,7 +30,7 @@ public class Version{
     /** Custom client version string used for various things */
     public static String clientVersion = "v1.0.0, Jan. 1, 1970";
 
-    public static void init(){
+    public static void init() {
         if(!enabled) return;
 
         Fi file = OS.isAndroid || OS.isIos ? Core.files.internal("version.properties") : new Fi("version.properties", FileType.internal);
@@ -38,8 +43,10 @@ public class Version{
         type = map.get("type");
         number = Integer.parseInt(map.get("number", "4"));
         modifier = map.get("modifier");
-        String filepath = Version.class.getProtectionDomain().getCodeSource().getLocation().getPath();
-        if (modifier.equals("release") && filepath.contains("/steamapps/common/Mindustry/")) modifier = "steam";
+        if (Core.app.isDesktop()) {
+            String filepath = Version.class.getProtectionDomain().getCodeSource().getLocation().getPath();
+            if (modifier.equals("release") && filepath.contains("/steamapps/common/Mindustry/")) modifier = "steam";
+        }
         if(map.get("build").contains(".")){
             String[] split = map.get("build").split("\\.");
             try{

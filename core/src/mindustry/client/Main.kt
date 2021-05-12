@@ -22,59 +22,64 @@ object Main : ApplicationListener {
     lateinit var communicationClient: Packets.CommunicationClient
     private var dispatchedBuildPlans = mutableListOf<BuildPlan>()
     private val buildPlanInterval = Interval()
+    private var initialized = false
 
     /** Run on client load. */
     override fun init() {
-        Crypto.initializeAlways()
-        if (Core.app.isDesktop) {
-            communicationSystem = SwitchableCommunicationSystem(MessageBlockCommunicationSystem, PluginCommunicationSystem)
-            communicationSystem.init()
+            Crypto.initializeAlways()
+            if (!Core.app.isHeadless) {
+                println("Aaaa")
+                communicationSystem =
+                    SwitchableCommunicationSystem(MessageBlockCommunicationSystem, PluginCommunicationSystem)
+                communicationSystem.init()
 
-            TileRecords.initialize()
-        } else {
-            communicationSystem = SwitchableCommunicationSystem(DummyCommunicationSystem(mutableListOf()))
-            communicationSystem.init()
-        }
-        communicationClient = Packets.CommunicationClient(communicationSystem)
-        messageCrypto = MessageCrypto()
-        messageCrypto.init(communicationClient)
-        KeyFolder.initializeAlways()
+                TileRecords.initialize()
+            } else {
+                communicationSystem = SwitchableCommunicationSystem(DummyCommunicationSystem(mutableListOf()))
+                communicationSystem.init()
+            }
+            communicationClient = Packets.CommunicationClient(communicationSystem)
+            messageCrypto = MessageCrypto()
+            messageCrypto.init(communicationClient)
+            KeyFolder.initializeAlways()
 
-        Navigation.navigator = AStarNavigator
+            Navigation.navigator = AStarNavigator
 
-        Events.on(EventType.WorldLoadEvent::class.java) {
-            dispatchedBuildPlans.clear()
-        }
-        Events.on(EventType.ServerJoinEvent::class.java) {
+            Events.on(EventType.WorldLoadEvent::class.java) {
+                dispatchedBuildPlans.clear()
+            }
+            Events.on(EventType.ServerJoinEvent::class.java) {
 //            if (Groups.build.contains { it is LogicBlock.LogicBuild && it.code.startsWith(ProcessorCommunicationSystem.PREFIX) }) {
                 communicationSystem.activeCommunicationSystem = MessageBlockCommunicationSystem
 //            } else {
 //                communicationSystem.activeCommunicationSystem = MessageBlockCommunicationSystem
 //            }
-        }
+            }
 
-        communicationClient.addListener { transmission, senderId ->
-            when (transmission) {
-                is BuildQueueTransmission -> {
-                    if (senderId == communicationSystem.id) return@addListener
-                    val path = Navigation.currentlyFollowing as? BuildPath ?: return@addListener
-                    if (path.queues.contains(path.networkAssist)) {
-                        val positions = IntSet()
-                        for (plan in path.networkAssist) positions.add(Point2.pack(plan.x, plan.y))
+            communicationClient.addListener { transmission, senderId ->
+                when (transmission) {
+                    is BuildQueueTransmission -> {
+                        if (senderId == communicationSystem.id) return@addListener
+                        val path = Navigation.currentlyFollowing as? BuildPath ?: return@addListener
+                        if (path.queues.contains(path.networkAssist)) {
+                            val positions = IntSet()
+                            for (plan in path.networkAssist) positions.add(Point2.pack(plan.x, plan.y))
 
-                        for (plan in transmission.plans.sortedByDescending { it.dst(Vars.player) }) {
-                            if (path.networkAssist.size > 1000) return@addListener  // too many plans, not accepting new ones
-                            if (positions.contains(Point2.pack(plan.x, plan.y))) continue
-                            path.networkAssist.add(plan)
+                            for (plan in transmission.plans.sortedByDescending { it.dst(Vars.player) }) {
+                                if (path.networkAssist.size > 1000) return@addListener  // too many plans, not accepting new ones
+                                if (positions.contains(Point2.pack(plan.x, plan.y))) continue
+                                path.networkAssist.add(plan)
+                            }
                         }
                     }
                 }
             }
-        }
+            initialized = true
     }
 
     /** Run once per frame. */
     override fun update() {
+        if (!initialized) return
         communicationClient.update()
 
         if (Core.scene.keyboardFocus == null && Core.input?.keyTap(Binding.send_build_queue) == true) {
@@ -87,11 +92,12 @@ object Main : ApplicationListener {
     }
 
     fun setPluginNetworking(enable: Boolean) {
+        println("AAAA ${Core.app.isHeadless}")
         when {
             enable -> {
                 communicationSystem.activeCommunicationSystem = PluginCommunicationSystem
             }
-            Core.app?.isDesktop == true -> {
+            Core.app?.isHeadless == false -> {
                 communicationSystem.activeCommunicationSystem = MessageBlockCommunicationSystem
             }
             else -> {
